@@ -1,7 +1,8 @@
 const Joi = require("joi")
 const { User } = require('../models');
 const bcrypt = require('bcrypt')
-const generateAuthToken = require('../utils/generatedAuthToken')
+const generateAuthToken = require('../utils/generatedAuthToken');
+const { Op } = require("sequelize");
 
 const uploadPicture = async (req, res) => {
     const userId = req.user.id // Get the authenticated user's ID
@@ -122,8 +123,45 @@ const loginUser = async (req, res) => {
     }
 }
 
+const suggestedUsernames = async (req, res) => {
+    const { partialUsername } = req.query
+    try {
+        // Fetch existing usernames that start with the partialUsername
+        const existingUsers = await User.findAll({
+            attributes: ['username'],
+            where: {
+                username: {
+                    [Op.like]: `${partialUsername}%`,
+                },
+            },
+        })
+
+        // Extractthe usernames from the fetched existing users 
+        const existingUsernames = existingUsers.map((user) => user.username)
+
+        // Generate suggested usernames that do not exist in the database
+        const suggestedUsernames = []
+        let counter = 1
+
+        while (suggestedUsernames.length < 5) {
+            const suggestedUsername = `${partialUsername}${counter}`
+
+            if (!existingUsernames.includes(suggestedUsername)) {
+                suggestedUsernames.push(suggestedUsername)
+            }
+
+            counter++
+        }
+        res.status(200).json(suggestedUsernames)
+    } catch (error) {
+        console.error('Error fetching suggested usernames:', error);
+        res.status(500).json({ error: 'An error occurred while fetching suggested usernames' });
+    }
+}
+
 module.exports = {
     createUser,
     uploadPicture,
-    loginUser
+    loginUser,
+    suggestedUsernames
 }

@@ -59,7 +59,7 @@ module.exports = (sequelize, DataTypes) => {
     hobbies: {
       type: DataTypes.TEXT,
       allowNull: true
-    }
+    },
   }, {
     sequelize,
     modelName: 'User',

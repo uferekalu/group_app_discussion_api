@@ -24,5 +24,6 @@ router.get('/', (req, res) => res.send('Welcome to the group app!'))
 router.post('/register', userControllers.createUser)
 router.post('/login', userControllers.loginUser)
 router.post('/upload-profile-picture', isUser, upload.single('profilePicture'), userControllers.uploadPicture)
+router.get('/suggested-usernames', userControllers.suggestedUsernames)
 
 module.exports = router
