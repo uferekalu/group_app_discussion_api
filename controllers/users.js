@@ -93,21 +93,21 @@ const loginUser = async (req, res) => {
         const { error } = schema.validate(req.body)
         if (error) {
             return res.status(400).json({
-                message: error.details[0].message
+                error: error.details[0].message
             })
         }
         const { email, password } = req.body
         const user = await User.findOne({ where: { email } })
 
         if (!user) {
-            return res.status(404).json({
-                message: "User not found, you may have to register before login"
+            return res.status(400).json({
+                error: "Invalid credentials"
             })
         }
         const passwordMatch = bcrypt.compareSync(password, user.password)
 
         if (!passwordMatch) {
-            return res.status(401).json({ message: 'Invalid credentials' })
+            return res.status(400).json({ error: 'Invalid credentials' })
         }
         const token = generateAuthToken(user);
 
