@@ -36,7 +36,17 @@ module.exports = {
       status: {
         type: Sequelize.ENUM('accepted', 'declined', 'pending'),
         defaultValue: 'pending'
-      }
+      },
+      createdAt: {
+        type: Sequelize.DATE,
+        allowNull: false,
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
+      },
+      updatedAt: {
+        type: Sequelize.DATE,
+        allowNull: false,
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
+      },
     });
   },
   async down(queryInterface, Sequelize) {

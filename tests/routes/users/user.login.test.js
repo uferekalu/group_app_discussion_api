@@ -1,10 +1,6 @@
-const request = require('supertest')
-const app = require('../../server.js')
-const bcrypt = require('bcrypt')
-const { User } = require('../../models/index.js');
+const app = require('../../../server.js')
 const chai = require('chai');
 const chaiHttp = require('chai-http');
-const generateAuthToken = require('../../utils/generatedAuthToken.js');
 
 const { expect } = chai;
 chai.use(chaiHttp);

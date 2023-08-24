@@ -1,7 +1,7 @@
 const request = require('supertest')
-const app = require('../../server.js')
+const app = require('../../../server.js')
 const bcrypt = require('bcrypt')
-const { User } = require('../../models/index.js');
+const { User } = require('../../../models/index.js');
 const chai = require('chai');
 const chaiHttp = require('chai-http');
 

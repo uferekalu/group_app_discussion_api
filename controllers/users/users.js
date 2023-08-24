@@ -1,7 +1,7 @@
 const Joi = require("joi")
-const { User } = require('../models');
+const { User } = require('../../models');
 const bcrypt = require('bcrypt')
-const generateAuthToken = require('../utils/generatedAuthToken');
+const generateAuthToken = require('../../utils/generatedAuthToken');
 const { Op } = require("sequelize");
 
 const uploadPicture = async (req, res) => {
