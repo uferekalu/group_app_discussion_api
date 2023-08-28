@@ -35,7 +35,7 @@ module.exports = {
       },
       discussion_id: {
         type: Sequelize.INTEGER,
-        allowNull: false,
+        allowNull: true,
         references: {
           model: 'discussions',
           key: 'id'

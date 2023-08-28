@@ -135,6 +135,60 @@ describe('Create Group API', () => {
         expect(res.body.error).to.equal(`"description" is required`)
     })
 
+    it('should return an error when name is invalid and user is authenticated', async () => {
+        const existingUser = {
+            email: 'johnclement@example.com',
+            password: 'johnclement123'
+        }
+
+        // Make a POST request to login a user
+        const data = await chai.request(app)
+            .post('/api/users/login')
+            .send(existingUser)
+
+        const newGroup = {
+            name: 'Ja',
+            description: 'This is the description of the group'
+        }
+
+        // Make a POST request to create a group with authentication
+        const res = await chai.request(app)
+            .post('/api/groups/create-group')
+            .set('x-auth-token', data.body.token)
+            .send(newGroup)
+
+        expect(res).to.have.status(400)
+        expect(res.body).to.have.property('error')
+        expect(res.body.error).to.equal(`"name" length must be at least 3 characters long`)
+    })
+    
+    it('should return an error when description is invalid and user is authenticated', async () => {
+        const existingUser = {
+            email: 'johnclement@example.com',
+            password: 'johnclement123'
+        }
+
+        // Make a POST request to login a user
+        const data = await chai.request(app)
+            .post('/api/users/login')
+            .send(existingUser)
+
+        const newGroup = {
+            name: 'JavaScript Programming',
+            description: 'This is'
+        }
+
+        // Make a POST request to create a group with authentication
+        const res = await chai.request(app)
+            .post('/api/groups/create-group')
+            .set('x-auth-token', data.body.token)
+            .send(newGroup)
+
+        expect(res).to.have.status(400)
+        expect(res.body).to.have.property('error')
+        expect(res.body.error).to.equal(`"description" length must be at least 10 characters long`)
+    })
+
     it('it should create a group when all required fields are provided and user authenticated', async () => {
         const existingUser = {
             email: 'johnclement@example.com',
