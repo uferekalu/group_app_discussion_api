@@ -18,12 +18,19 @@ const storage = multer.diskStorage({
     }
 })
 
-const upload = multer({ storage })
+const upload = multer({
+    storage, 
+    limits: {
+        fileSize: 1024 * 1024 * 5
+    },
+})
 
 router.get('/', (req, res) => res.send('Welcome to the group app!'))
 router.post('/register', userControllers.createUser)
 router.post('/login', userControllers.loginUser)
 router.post('/upload-profile-picture', isUser, upload.single('profilePicture'), userControllers.uploadPicture)
 router.get('/suggested-usernames', userControllers.suggestedUsernames)
+router.get('/user-details/:id', isUser, userControllers.getUserDetails)
+router.put('/user-update/:id', isUser, userControllers.updateUser)
 
 module.exports = router

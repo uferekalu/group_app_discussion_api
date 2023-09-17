@@ -68,16 +68,42 @@ const getAllGroups = async (req, res) => {
         const allGroups = await Promise.all(groups.map(async (group) => {
             const creator = await User.findOne({ where: { id: group.creator_id } });
             const { id, name, description, creator_id, createdAt } = group;
+            // Get members belongin to this group
+            const members = await Group_members.findAll({
+                where: {
+                    group_id: id
+                }
+            })
+            let allUsers = []
+            for (let member of members) {
+                const userId = member.user_id
+                const user = await User.findByPk(userId)
+                allUsers.push(user.username)
+            }
+            // Get the discussions belonging to this group
+            const allDiscussions = await Discussions.findAll({
+                where: {
+                    group_id: id
+                }
+            })
             const details = {
                 id,
                 name,
                 description,
                 creator_id,
                 creatorName: creator.name,
-                createdAt
+                username: creator.username,
+                createdAt,
+                allUsers,
+                allDiscussions
             };
             return details;
         }));
+        if (!allGroups) {
+            return res.status(400).json({
+                error: "No Group found"
+            })
+        }
         res.status(200).json({
             allGroups
         })
@@ -97,12 +123,7 @@ const getAGroup = async (req, res) => {
         // Check if the user is a group member by querying the group-members table
         const isMemmber = await Group_members.findOne({ where: { user_id: userId, group_id: groupID } })
 
-        if (!isMemmber) {
-            return res.status(400).json({
-                error: `User with id ${userId} is not a member of Group with id ${groupID}`
-            })
-        }
-        // Get all the group information including its member details
+        //Get all the group information including its member details
         const groupDetails = await Group.findOne({
             where: {
                 id: groupID
@@ -121,6 +142,12 @@ const getAGroup = async (req, res) => {
                 }
             ]
         })
+
+        if (!groupDetails) {
+            return res.status(400).json({
+                error: `No group with id ${groupID}`
+            })
+        }
 
         res.status(200).json({
             message: "Group details returned successfully",
@@ -472,7 +499,7 @@ const getAllDiscussionsInAGroup = async (req, res) => {
     const member = await Group_members.findOne({ where: { group_id: groupId, user_id: userId } })
     if (!member) {
         return res.status(400).json({
-            error: `User with id ${userId} is not a member of the group with id ${groupId}. Join the group to see discussions`
+            error: `User is not a member`
         })
     }
 
@@ -496,6 +523,12 @@ const getAllDiscussionsInAGroup = async (req, res) => {
                 }
             ]
         })
+
+        if (!discussions) {
+            return res.status(400).json({
+                error: "No Discussions found in this group"
+            })
+        }
 
         res.status(200).json({
             message: "Discussion details returned successfully",
@@ -837,6 +870,51 @@ const getInviteNotifications = async (req, res) => {
     }
 }
 
+const getAllNotificationsForAUser = async (req, res) => {
+    const userId = parseInt(req.user.id)
+    const user = await User.findByPk(userId)
+    try {
+        const notifications = await Notifications.findAll({
+            where: {
+                receiver_id: userId
+            }
+        })
+
+        const allNotifications = await Promise.all(notifications.map(async (notification) => {
+            const senderId = notification.sender_id
+            const groupId = notification.group_id
+            const discussionId = notification.discussion_id && notification.discussion_id
+            const sender = await User.findByPk(senderId)
+            const group = await Group.findByPk(groupId)
+            const discussion = await Discussions.findByPk(discussionId)
+            const { id, content, status, createdAt } = notification
+
+            const data = {
+                id,
+                sender: sender.name,
+                group: group.name,
+                discussion: discussion && discussion.title,
+                content,
+                message: content === "You have an invitation waiting for your action" ? `${sender.name} sent you an invitation to join ${group.name} group`: content,
+                status,
+                createdAt
+            }
+            return data
+        }))
+
+        res.status(200).json({
+            message: "All your notifications",
+            allNotifications
+        })
+
+    } catch (error) {
+        console.error("Error occured occured while getting all notifications:", error)
+        res.status(500).json({
+            error: 'Error occured occured while getting all notifications'
+        })
+    }
+}
+
 const handleDiscussionNotifications = async (req, res) => {
     const userId = parseInt(req.user.id)
     const groupId = parseInt(req.params.groupId)
@@ -1046,5 +1124,6 @@ module.exports = {
     getInviteNotifications,
     handleDiscussionNotifications,
     replyComment,
-    deleteAGroup
+    deleteAGroup,
+    getAllNotificationsForAUser
 }

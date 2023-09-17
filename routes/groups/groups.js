@@ -21,5 +21,6 @@ router.get('/all-invite-notifications', isUser, groupControllers.getInviteNotifi
 router.get('/handle-discussion-notification/:groupId/:discussionId', isUser, groupControllers.handleDiscussionNotifications)
 router.post('/reply/:commentId', isUser, groupControllers.replyComment)
 router.delete('/:groupId', isUser, groupControllers.deleteAGroup)
+router.get('/all-notifications', isUser, groupControllers.getAllNotificationsForAUser)
 
 module.exports = router

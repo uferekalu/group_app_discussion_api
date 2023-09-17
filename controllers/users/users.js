@@ -5,9 +5,16 @@ const generateAuthToken = require('../../utils/generatedAuthToken');
 const { Op } = require("sequelize");
 
 const uploadPicture = async (req, res) => {
+    console.log(req.body)
     const userId = req.user.id // Get the authenticated user's ID
-    const filePath = req.file.path // Get the file path where the profile picture is saved
+    const filePath = req.file?.path // Get the file path where the profile picture is saved
     // Save the filePath to the profile_picture field in the users table
+
+    if (!filePath) {
+        return res.status(400).json({
+            error: "Path not found!"
+        })
+    }
     try {
         await User.update({
             profile_picture: filePath
@@ -16,9 +23,11 @@ const uploadPicture = async (req, res) => {
                 id: userId
             }
         })
+        const user = await User.findByPk(userId)
 
         res.status(200).json({
-            message: "Profile picture uploaded successfully"
+            message: "Profile picture uploaded successfully",
+            uploadPath: user.profile_picture
         })
     } catch (error) {
         console.error("Error updating profile picture:", error)
@@ -159,9 +168,94 @@ const suggestedUsernames = async (req, res) => {
     }
 }
 
+const getUserDetails = async (req, res) => {
+    const userId = parseInt(req.params.id)
+    try {
+        const userDetails = await User.findByPk(userId)
+        if (!userDetails) {
+            return res.status(400).json({
+                error: "User not found"
+            })
+        }
+
+        const { id, name, username, email, profile_picture, country, sex, hobbies } = userDetails
+        const userData = {
+            id,
+            name,
+            username,
+            email,
+            profile_picture,
+            country,
+            sex,
+            hobbies
+        }
+        res.status(200).json({
+            message: "User retrieved successfully",
+            userDetails: userData
+        })
+    } catch (error) {
+        console.error('Error getting user details:', error);
+        res.status(500).json({ error: 'An error occurred while getting user details' });
+    }
+}
+
+const updateUser = async (req, res) => {
+    const userId = parseInt(req.params.id)
+    const schema = Joi.object({
+        name: Joi.string().min(3).max(40).required(),
+        email: Joi.string().required().email(),
+        username: Joi.string().min(3).max(200).required(),
+        country: Joi.string(),
+        sex: Joi.string(),
+        hobbies: Joi.string()
+    })
+    const { error } = schema.validate(req.body)
+    if (error) {
+        return res.status(400).json({
+            error: error.details[0].message
+        })
+    }
+
+    try {
+        const { name, email, username, country, sex, hobbies } = req.body
+        const user = await User.findByPk(userId)
+        user.name = name
+        user.email = email
+        user.username = username
+        if (country) {
+            user.country = country
+        }
+        if (sex) {
+            user.sex = sex
+        }
+        if (hobbies) {
+            user.hobbies = hobbies
+        }
+        await user.save()
+        const userData = {
+            name: user.name,
+            username: user.username,
+            email: user.email,
+            profile_picture: user.profile_picture,
+            country: user.country,
+            sex: user.sex,
+            hobbies: user.hobbies
+        }
+        res.status(200).json({
+            message: "User updated successfully!",
+            userData
+        })
+    } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({ error: 'An error occurred while updating user' });
+    }
+}
+
 module.exports = {
     createUser,
     uploadPicture,
     loginUser,
-    suggestedUsernames
+    suggestedUsernames,
+    getUserDetails,
+    updateUser
 }
