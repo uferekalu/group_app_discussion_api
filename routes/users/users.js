@@ -32,5 +32,6 @@ router.post('/upload-profile-picture', isUser, upload.single('profilePicture'), 
 router.get('/suggested-usernames', userControllers.suggestedUsernames)
 router.get('/user-details/:id', isUser, userControllers.getUserDetails)
 router.put('/user-update/:id', isUser, userControllers.updateUser)
+router.get("/users", isUser, userControllers.getAllUsers)
 
 module.exports = router

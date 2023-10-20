@@ -93,6 +93,7 @@ const getAllGroups = async (req, res) => {
                 creator_id,
                 creatorName: creator.name,
                 username: creator.username,
+                profile_picture: creator.profile_picture,
                 createdAt,
                 allUsers,
                 allDiscussions
@@ -574,11 +575,11 @@ const getAllCommentsFromADiscussion = async (req, res) => {
             where: {
                 id: discussionId
             },
-            attributes: ['id', 'title', 'content', 'author_id'],
+            attributes: ['id', 'title', 'content', 'author_id', 'group_id', 'createdAt'],
             include: [
                 {
                     model: Comments,
-                    attributes: ['id', 'content', 'author_id', 'discussion_id', 'likes', 'dislikes'],
+                    attributes: ['id', 'content', 'author_id', 'discussion_id', 'likes', 'dislikes', 'createdAt'],
                     include: [
                         {
                             model: User,
@@ -586,7 +587,7 @@ const getAllCommentsFromADiscussion = async (req, res) => {
                         },
                         {
                             model: Replies,
-                            attributes: ['id', 'content', 'author_id', 'comment_id', 'likes', 'dislikes'],
+                            attributes: ['id', 'content', 'author_id', 'comment_id', 'likes', 'dislikes', 'createdAt'],
                             include: [
                                 {
                                     model: User,
@@ -598,9 +599,25 @@ const getAllCommentsFromADiscussion = async (req, res) => {
                 },
             ]
         })
+        const discussionCreator = await User.findByPk(discussion.author_id)
+        const { id, name, email, username, sex, profile_picture, hobbies, country } = discussionCreator
+        const creator = {
+            id,
+            name,
+            email,
+            username,
+            sex,
+            profile_picture,
+            hobbies,
+            country
+        }
+        const data = {
+            discussion,
+            creator
+        }
         res.status(200).json({
             message: "Discussion details returned successfully",
-            discussion
+            data
         })
     } catch (error) {
         console.error("Error occured while getting the discussion:", error)
@@ -669,13 +686,11 @@ const getACommentByUserInADiscussion = async (req, res) => {
     }
 }
 
-const makeAComment = async (req, res) => {
+const makeACommentOnADiscussion = async (req, res) => {
     const userId = parseInt(req.user.id)
     const schema = Joi.object({
-        content: Joi.string().required(),
+        content: Joi.string(),
         discussion_id: Joi.number().required(),
-        likes: Joi.number(),
-        dislikes: Joi.number()
     })
 
     const { error } = schema.validate(req.body)
@@ -688,7 +703,7 @@ const makeAComment = async (req, res) => {
     // Get the user
     const user = await User.findByPk(userId)
 
-    const { content, discussion_id, likes, dislikes } = req.body
+    const { content, discussion_id } = req.body
     // Check if discussion exists
     const discussion = await Discussions.findByPk(discussion_id)
     if (!discussion) {
@@ -707,9 +722,7 @@ const makeAComment = async (req, res) => {
         const comment = await Comments.create({
             content,
             author_id: userId,
-            discussion_id,
-            likes,
-            dislikes
+            discussion_id
         })
         // Notify the author that someone has reacted to the discussion he created
         if (comment) {
@@ -727,6 +740,434 @@ const makeAComment = async (req, res) => {
         console.error("Error occured while making comment:", error)
         res.status(500).json({
             error: 'Error occured while making comment'
+        })
+    }
+}
+
+const likeADiscussion = async (req, res) => {
+    const userId = parseInt(req.user.id)
+    const schema = Joi.object({
+        discussion_id: Joi.number().required(),
+    })
+
+    const { error } = schema.validate(req.body)
+    if (error) {
+        return res.status(400).json({
+            error: error.details[0].message
+        })
+    }
+
+    // Get the user
+    const user = await User.findByPk(userId)
+
+    const { discussion_id } = req.body
+
+    // Check if discussion exists
+    const discussion = await Discussions.findByPk(discussion_id)
+    if (!discussion) {
+        return res.status(400).json({
+            error: `Discussion with id ${discussion_id} does not exist`
+        })
+    }
+
+    // Check if the user is a member of the group that the disucssion belongs to
+    const member = await Group_members.findOne({ where: { group_id: discussion.group_id, user_id: userId } })
+    if (!member) {
+        return res.status(400).json({
+            error: `User with id ${userId} is not a member of the group with id ${discussion.group_id}`
+        })
+    }
+    try {
+        const comments = await Comments.findAll({
+            where: {
+                discussion_id: discussion_id,
+                author_id: userId
+            }
+        })
+        let totalLikes = 0
+        let totalDisLikes = 0
+        await Promise.all(comments.map(async (comment) => {
+            const { likes, dislikes } = comment
+            totalLikes += likes
+            totalDisLikes += dislikes
+        }))
+
+        if (totalDisLikes > 0) {
+            return res.status(400).json({
+                message: "You cannot like this discussion since you have already disliked it. Remove the dislike in order to like this discussion"
+            })
+        }
+
+        if (totalLikes < 1) {
+            await Comments.create({
+                author_id: userId,
+                discussion_id,
+                likes: 1
+            })
+            await Notifications.create({
+                sender_id: userId,
+                receiver_id: discussion.author_id,
+                group_id: discussion.group_id,
+                discussion_id: discussion.id,
+                content: `${user.username} likes ${discussion.title} you created`,
+                status: 'unread'
+            })
+            res.status(200).json({
+                message: "You have liked the discussion"
+            })
+        } else {
+            const destroyedComment = await Comments.destroy({
+                where: {
+                    author_id: userId,
+                    discussion_id: discussion_id,
+                    likes: 1
+                }
+            })
+            if (destroyedComment === 1) {
+                res.status(200).json({
+                    message: "Your like for the discussion has been removed"
+                })
+            }
+        }
+    } catch (error) {
+        console.error("Error occured while liking the discussion:", error)
+        res.status(500).json({
+            error: 'Error occured while liking the discussion'
+        })
+    }
+}
+
+const dislikeADiscussion = async (req, res) => {
+    const userId = parseInt(req.user.id)
+    const schema = Joi.object({
+        discussion_id: Joi.number().required(),
+    })
+
+    const { error } = schema.validate(req.body)
+    if (error) {
+        return res.status(400).json({
+            error: error.details[0].message
+        })
+    }
+
+    // Get the user
+    const user = await User.findByPk(userId)
+
+    const { discussion_id } = req.body
+
+    // Check if discussion exists
+    const discussion = await Discussions.findByPk(discussion_id)
+    if (!discussion) {
+        return res.status(400).json({
+            error: `Discussion with id ${discussion_id} does not exist`
+        })
+    }
+
+    // Check if the user is a member of the group that the disucssion belongs to
+    const member = await Group_members.findOne({ where: { group_id: discussion.group_id, user_id: userId } })
+    if (!member) {
+        return res.status(400).json({
+            error: `User with id ${userId} is not a member of the group with id ${discussion.group_id}`
+        })
+    }
+    try {
+        const comments = await Comments.findAll({
+            where: {
+                discussion_id: discussion_id,
+                author_id: userId
+            }
+        })
+        let totalDisLikes = 0
+        let totalLikes = 0
+        await Promise.all(comments.map(async (comment) => {
+            const { dislikes, likes } = comment
+            totalDisLikes += dislikes
+            totalLikes += likes
+        }))
+
+        if (totalLikes > 0) {
+            return res.status(400).json({
+                message: "You cannot dislike this discussion since you have already liked it. Remove the like in order to dislike this discussion"
+            })
+        }
+
+        if (totalDisLikes < 1) {
+            await Comments.create({
+                author_id: userId,
+                discussion_id,
+                dislikes: 1
+            })
+            res.status(200).json({
+                message: "You have disliked the discussion"
+            })
+        } else {
+            const destroyedComment = await Comments.destroy({
+                where: {
+                    author_id: userId,
+                    discussion_id: discussion_id,
+                    dislikes: 1
+                }
+            })
+            if (destroyedComment === 1) {
+                res.status(200).json({
+                    message: "Your dislike for the discussion has been removed"
+                })
+            }
+        }
+    } catch (error) {
+        console.error("Error occured while disliking the discussion:", error)
+        res.status(500).json({
+            error: 'Error occured while disliking the discussion'
+        })
+    }
+}
+
+const replyAComment = async (req, res) => {
+    const userId = parseInt(req.user.id)
+    const schema = Joi.object({
+        content: Joi.string(),
+        comment_id: Joi.number().required(),
+    })
+
+    const { error } = schema.validate(req.body)
+    if (error) {
+        return res.status(400).json({
+            error: error.details[0].message
+        })
+    }
+
+    // Get the user
+    const user = await User.findByPk(userId)
+
+    const { content, comment_id } = req.body
+    // Check if discussion exists
+    const comment = await Comments.findByPk(comment_id)
+    if (!comment) {
+        return res.status(400).json({
+            error: `Comment with id ${comment_id} does not exist`
+        })
+    }
+
+    const discussionId = comment.discussion_id
+    // Get the discussion
+    const discussion = await Discussions.findByPk(discussionId)
+    const groupId = discussion.group_id
+
+    // Check if the user is a member of the group that the disucssion belongs to
+    const member = await Group_members.findOne({ where: { group_id: groupId, user_id: userId } })
+    if (!member) {
+        return res.status(400).json({
+            error: `User with id ${userId} is not a member of the group with id ${groupId}`
+        })
+    }
+    try {
+        const reply = await Replies.create({
+            content,
+            author_id: userId,
+            comment_id
+        })
+        // Notify the author that someone has reacted to the comment he made
+        if (reply) {
+            await Notifications.create({
+                sender_id: userId,
+                receiver_id: comment.author_id,
+                group_id: groupId,
+                discussion_id: discussion.id,
+                content: `${user.username} has reacted to comment you made`,
+                status: 'unread'
+            })
+            res.status(200).json(reply)
+        }
+    } catch (error) {
+        console.error("Error occured while making a reply:", error)
+        res.status(500).json({
+            error: 'Error occured while making a reply'
+        })
+    }
+}
+
+const likeAComment = async (req, res) => {
+    const userId = parseInt(req.user.id)
+    const schema = Joi.object({
+        comment_id: Joi.number().required(),
+    })
+
+    const { error } = schema.validate(req.body)
+    if (error) {
+        return res.status(400).json({
+            error: error.details[0].message
+        })
+    }
+
+    // Get the user
+    const user = await User.findByPk(userId)
+
+    const { comment_id } = req.body
+
+    // Check if discussion exists
+    const comment = await Comments.findByPk(comment_id)
+    if (!comment) {
+        return res.status(400).json({
+            error: `Comment with id ${comment_id} does not exist`
+        })
+    }
+
+    const discussionId = comment.discussion_id
+    // Get the discussion
+    const discussion = await Discussions.findByPk(discussionId)
+    const groupId = discussion.group_id
+    // Check if the user is a member of the group that the disucssion belongs to
+    const member = await Group_members.findOne({ where: { group_id: groupId, user_id: userId } })
+    if (!member) {
+        return res.status(400).json({
+            error: `User with id ${userId} is not a member of the group with id ${groupId}`
+        })
+    }
+    try {
+        const replies = await Replies.findAll({
+            where: {
+                comment_id: comment_id,
+                author_id: userId
+            }
+        })
+        let totalLikes = 0
+        let totalDisLikes = 0
+        await Promise.all(replies.map(async (reply) => {
+            const { likes, dislikes } = reply
+            totalLikes += likes
+            totalDisLikes += dislikes
+        }))
+
+        if (totalDisLikes > 0) {
+            return res.status(400).json({
+                message: "You cannot like this comment since you have already disliked it. Remove the dislike in order to like this comment"
+            })
+        }
+
+        if (totalLikes < 1) {
+            await Replies.create({
+                author_id: userId,
+                comment_id,
+                likes: 1
+            })
+            await Notifications.create({
+                sender_id: userId,
+                receiver_id: discussion.author_id,
+                group_id: groupId,
+                discussion_id: discussion.id,
+                content: `${user.username} likes your comment`,
+                status: 'unread'
+            })
+            res.status(200).json({
+                message: "You have liked the comment"
+            })
+        } else {
+            const destroyedReply = await Replies.destroy({
+                where: {
+                    author_id: userId,
+                    comment_id: comment_id,
+                    likes: 1
+                }
+            })
+            if (destroyedReply === 1) {
+                res.status(200).json({
+                    message: "Your like for the comment has been removed"
+                })
+            }
+        }
+    } catch (error) {
+        console.error("Error occured while liking the comment:", error)
+        res.status(500).json({
+            error: 'Error occured while liking the comment'
+        })
+    }
+}
+
+const dislikeAComment = async (req, res) => {
+    const userId = parseInt(req.user.id)
+    const schema = Joi.object({
+        comment_id: Joi.number().required(),
+    })
+
+    const { error } = schema.validate(req.body)
+    if (error) {
+        return res.status(400).json({
+            error: error.details[0].message
+        })
+    }
+
+    // Get the user
+    const user = await User.findByPk(userId)
+
+    const { comment_id } = req.body
+
+    // Check if discussion exists
+    const comment = await Comments.findByPk(comment_id)
+    if (!comment) {
+        return res.status(400).json({
+            error: `Comment with id ${comment_id} does not exist`
+        })
+    }
+
+    const discussionId = comment.discussion_id
+    // Get the discussion
+    const discussion = await Discussions.findByPk(discussionId)
+    const groupId = discussion.group_id
+    // Check if the user is a member of the group that the disucssion belongs to
+    const member = await Group_members.findOne({ where: { group_id: groupId, user_id: userId } })
+    if (!member) {
+        return res.status(400).json({
+            error: `User with id ${userId} is not a member of the group with id ${groupId}`
+        })
+    }
+    try {
+        const replies = await Replies.findAll({
+            where: {
+                comment_id: comment_id,
+                author_id: userId
+            }
+        })
+        let totalDisLikes = 0
+        let totalLikes = 0
+        await Promise.all(replies.map(async (reply) => {
+            const { likes, dislikes } = reply
+            totalDisLikes += dislikes
+            totalLikes += likes
+        }))
+
+        if (totalLikes > 0) {
+            return res.status(400).json({
+                message: "You cannot dislike this comment since you have already liked it. Remove the like in order to dislike this comment"
+            })
+        }
+
+        if (totalDisLikes < 1) {
+            await Replies.create({
+                author_id: userId,
+                comment_id,
+                dislikes: 1
+            })
+            res.status(200).json({
+                message: "You have disliked the comment"
+            })
+        } else {
+            const destroyedReply = await Replies.destroy({
+                where: {
+                    author_id: userId,
+                    comment_id: comment_id,
+                    dislikes: 1
+                }
+            })
+            if (destroyedReply === 1) {
+                res.status(200).json({
+                    message: "Your dislike for the comment has been removed"
+                })
+            }
+        }
+    } catch (error) {
+        console.error("Error occured while disliking the comment:", error)
+        res.status(500).json({
+            error: 'Error occured while disliking the comment'
         })
     }
 }
@@ -895,7 +1336,7 @@ const getAllNotificationsForAUser = async (req, res) => {
                 group: group.name,
                 discussion: discussion && discussion.title,
                 content,
-                message: content === "You have an invitation waiting for your action" ? `${sender.name} sent you an invitation to join ${group.name} group`: content,
+                message: content === "You have an invitation waiting for your action" ? `${sender.name} sent you an invitation to join ${group.name} group` : content,
                 status,
                 createdAt
             }
@@ -1067,6 +1508,42 @@ const replyComment = async (req, res) => {
     }
 }
 
+const getADiscussion = async (req, res) => {
+    const discussionId = parseInt(req.params.discussionId)
+
+    try {
+        const disucssion = await Discussions.findByPk(discussionId)
+        res.status(200).json(disucssion)
+    } catch (error) {
+        console.error("Error occured getting a discussion:", error)
+        res.status(500).json({
+            error: 'Error occured getting a discussion'
+        })
+    }
+}
+
+const deleteNotification = async (req, res) => {
+    const userId = parseInt(req.user.id)
+    const notificationId = parseInt(req.params.notificationId)
+    try {
+        const deletedNotification = await Notifications.destroy({
+            where: {
+                id: notificationId
+            }
+        })
+        if (deletedNotification === 1) {
+            res.status(200).json({
+                message: "Notification deleted successfully!"
+            })
+        }
+    } catch (error) {
+        console.error("Error occured while deleting notification:", error)
+        res.status(500).json({
+            error: 'Error occured while deleting notification'
+        })
+    }
+}
+
 const deleteAGroup = async (req, res) => {
     const userId = parseInt(req.user.id)
     const groupID = parseInt(req.params.groupId)
@@ -1118,12 +1595,18 @@ module.exports = {
     getAllDiscussionsInAGroup,
     getAllCommentsFromADiscussion,
     getACommentByUserInADiscussion,
-    makeAComment,
+    makeACommentOnADiscussion,
     getTotalLikesAndDisLikesForADiscussion,
     userNotificationsInGroup,
     getInviteNotifications,
     handleDiscussionNotifications,
-    replyComment,
     deleteAGroup,
-    getAllNotificationsForAUser
+    getAllNotificationsForAUser,
+    deleteNotification,
+    likeADiscussion,
+    dislikeADiscussion,
+    replyAComment,
+    likeAComment,
+    dislikeAComment,
+    getADiscussion
 }

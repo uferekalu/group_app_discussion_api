@@ -108,6 +108,17 @@ const loginUser = async (req, res) => {
         const { email, password } = req.body
         const user = await User.findOne({ where: { email } })
 
+        const userData = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            username: user.username,
+            profile_picture: user.profile_picture,
+            country: user.country,
+            sex: user.sex,
+            hobbies: user.hobbies
+        }
+
         if (!user) {
             return res.status(400).json({
                 error: "Invalid credentials"
@@ -118,10 +129,22 @@ const loginUser = async (req, res) => {
         if (!passwordMatch) {
             return res.status(400).json({ error: 'Invalid credentials' })
         }
-        const token = generateAuthToken(user);
+        const token = generateAuthToken(userData);
+
+        const data = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            username: user.username,
+            profile_picture: user.profile_picture,
+            country: user.country,
+            sex: user.sex,
+            hobbies: user.hobbies
+        }
 
         res.status(200).json({
             message: "Login successfull",
+            data,
             token
         })
     } catch (error) {
@@ -199,6 +222,38 @@ const getUserDetails = async (req, res) => {
     }
 }
 
+const getAllUsers = async (req, res) => {
+    try {
+        const allUsers = await User.findAll()
+        if (!allUsers) {
+            return res.status(400).json({
+                error: "Error getting all users"
+            })
+        }
+        const users = allUsers.map((user) => {
+            const { id, name, username, email, profile_picture, country, sex, hobbies } = user
+            const data = {
+                id,
+                name,
+                username,
+                email,
+                profile_picture,
+                country,
+                sex,
+                hobbies
+            }
+            return data
+        })
+        res.status(200).json({
+            message: "Users retrieved successfully",
+            users
+        })
+    } catch (error) {
+        console.error('Error retrieving users:', error);
+        res.status(500).json({ error: 'An error occurred while retrieving users' });
+    }
+}
+
 const updateUser = async (req, res) => {
     const userId = parseInt(req.params.id)
     const schema = Joi.object({
@@ -257,5 +312,6 @@ module.exports = {
     loginUser,
     suggestedUsernames,
     getUserDetails,
-    updateUser
+    updateUser,
+    getAllUsers
 }

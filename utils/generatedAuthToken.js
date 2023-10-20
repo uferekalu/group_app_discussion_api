@@ -15,7 +15,7 @@ const generateAuthToken = (user) => {
         },
         jwtSecretKey,
         {
-            expiresIn: '1d'
+            expiresIn: '7d'
         }
     )
 
