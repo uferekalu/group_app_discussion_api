@@ -19,7 +19,8 @@ module.exports = (sequelize, DataTypes) => {
   Comments.init({
     content: {
       type: DataTypes.STRING,
-      allowNull: true
+      allowNull: true,
+      defaultValue: ""
     },
     author_id: {
       type: DataTypes.INTEGER,

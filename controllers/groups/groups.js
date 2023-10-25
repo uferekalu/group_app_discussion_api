@@ -794,7 +794,7 @@ const likeADiscussion = async (req, res) => {
 
         if (totalDisLikes > 0) {
             return res.status(400).json({
-                message: "You cannot like this discussion since you have already disliked it. Remove the dislike in order to like this discussion"
+                error: "You cannot like this discussion since you have already disliked it. Remove the dislike in order to like this discussion"
             })
         }
 
@@ -887,7 +887,7 @@ const dislikeADiscussion = async (req, res) => {
 
         if (totalLikes > 0) {
             return res.status(400).json({
-                message: "You cannot dislike this discussion since you have already liked it. Remove the like in order to dislike this discussion"
+                error: "You cannot dislike this discussion since you have already liked it. Remove the like in order to dislike this discussion"
             })
         }
 
@@ -1040,7 +1040,7 @@ const likeAComment = async (req, res) => {
 
         if (totalDisLikes > 0) {
             return res.status(400).json({
-                message: "You cannot like this comment since you have already disliked it. Remove the dislike in order to like this comment"
+                error: "You cannot like this comment since you have already disliked it. Remove the dislike in order to like this comment"
             })
         }
 
@@ -1137,7 +1137,7 @@ const dislikeAComment = async (req, res) => {
 
         if (totalLikes > 0) {
             return res.status(400).json({
-                message: "You cannot dislike this comment since you have already liked it. Remove the like in order to dislike this comment"
+                error: "You cannot dislike this comment since you have already liked it. Remove the like in order to dislike this comment"
             })
         }
 
